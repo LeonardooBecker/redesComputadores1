@@ -28,6 +28,8 @@
 
 #define ERRO_FORMATACAO 4
 
+#define RECEBE_ARQUIVO 5
+
 typedef struct
 {
     unsigned char marcadorDeInicio : 8;
@@ -167,7 +169,6 @@ int cria_raw_socket(char *nome_interface_rede)
     pacote_t pacote;
     pacote.marcadorDeInicio = 126;
     memset(pacote.dados, 0, TAM);
-    strcpy(pacote.dados, "TESTE DE MENSAGEM");
     pacote.tamanho = strlen(pacote.dados);
 
     unsigned char crc8;
@@ -448,6 +449,7 @@ int main()
     FILE *arq;
 
     int state;
+    int stateAuxiliar;
     int packAtual = 0;
 
     while (1)
@@ -459,7 +461,7 @@ int main()
         pontlocal = 0;
         pontsinalant = 0;
         ack = 0;
-        sequencia=0;
+        sequencia = 0;
         atualiza = 0;
 
         state = receba();
@@ -507,7 +509,7 @@ int main()
                         memset(mensagem[sequencia], 0, TAM);
                         sprintf(mensagem[sequencia], "[%02d/%02d/%04d %02d:%02d:%02d]<%s> : %s\n",
                                 tm_now->tm_mday, tm_now->tm_mon + 1, tm_now->tm_year + 1900,
-                                tm_now->tm_hour, tm_now->tm_min, tm_now->tm_sec, getenv("USER"), linha);    
+                                tm_now->tm_hour, tm_now->tm_min, tm_now->tm_sec, getenv("USER"), linha);
                         // sprintf(mensagem[sequencia],"%s",linha);
                         sequencia++;
                     }
@@ -563,7 +565,10 @@ int main()
                         // Preenchimento de pacote
                         pacote.marcadorDeInicio = 126;
                         pacote.sequencia = pontlocal;
-                        pacote.tipo = 0x01;
+                        if (state == ENVIA_MENSAGEM)
+                            pacote.tipo = 0x01;
+                        if (state == ENVIA_ARQUIVO)
+                            pacote.tipo = 0x10;
                         pacote.tamanho = (unsigned char)(sizeof(mensagem[pontlocal]));
                         memset(pacote.dados, 0, TAM);
                         for (int i = 0; i < sizeof(mensagem[pontlocal]); i++)
@@ -646,8 +651,12 @@ int main()
                     // printf("Dados:%s\n", pacote.dados);
                     // printf("CRC:%x\n", pacote.crc);
                     // printf("\n");
-                    if (pacote.tipo == 0x01)
+                    if ((pacote.tipo == 0x01) || (pacote.tipo == 0x10))
                     {
+                        if (pacote.tipo == 0x01)
+                            stateAuxiliar = RECEBE_MENSAGEM;
+                        if (pacote.tipo == 0x10)
+                            stateAuxiliar = RECEBE_ARQUIVO;
                         memset(mensagemCompleta[packAtual], 0, TAM);
                         for (int i = 0; i < TAM; i++)
                             mensagemCompleta[packAtual][i] = pacote.dados[i];
@@ -676,15 +685,24 @@ int main()
                     perror("sendto");
                 }
             }
-
             FILE *arq2;
-            arq2 = fopen("img.jpg", "wb");
-            for (int i = 0; i < packAtual; i++)
+            if (stateAuxiliar == RECEBE_ARQUIVO)
             {
-                printf("%s", mensagemCompleta[i]);
-                fwrite(mensagemCompleta[i], 1, sizeof(mensagemCompleta[i]), arq2);
+                printf("midia enviada\n\n");
+                arq2 = fopen("img.jpg", "wb");
+                for (int i = 0; i < packAtual; i++)
+                {
+                    fwrite(mensagemCompleta[i], 1, sizeof(mensagemCompleta[i]), arq2);
+                }
+                fclose(arq2);
             }
-            fclose(arq2);
+            if (stateAuxiliar == RECEBE_MENSAGEM)
+            {
+                for (int i = 0; i < packAtual; i++)
+                {
+                    printf("%s", mensagemCompleta[i]);
+                }
+            }
         }
 
         state = NADA_RECEBIDO;
