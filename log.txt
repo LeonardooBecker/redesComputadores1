@@ -1,0 +1,20 @@
+		Iniciando batebapo
+
+Mensagem recebida: [14/02/2023 10:17:22]<root> : aooo
+
+Mensagem recebida: [14/02/2023 10:17:24]<root> : enviando
+
+Mensagem enviada: [14/02/2023 10:17:28]<root> : posso?
+
+Mensagem enviada: [14/02/2023 10:17:32]<root> : ao trem bao
+
+Mensagem enviada: [14/02/2023 10:17:37]<root> : consigo enviar tudo
+
+Mensagem recebida: [14/02/2023 10:17:46]<root> : eut bm cosguo
+
+Mensagem enviada: [14/02/2023 10:17:49]<root> : :send
+
+Midia enviada: [14/02/2023 10:17:49]<root> : </home/lbo21/Faculdade/redesComputadores1/antena.jpg>
+
+Midia Recebida: [14/02/2023 10:18:15]<root> : Arquivo de midia enviado! O arquivo pode ser encontrado em </home/lbo21/Faculdade/redesComputadores1/img.jpg>
+
