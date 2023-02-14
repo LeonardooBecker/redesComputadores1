@@ -92,7 +92,7 @@ void erroHorizontal(byte_t elemento[TAM + 1], int coluna, int erros[TAM * 8][2],
 }
 
 // Imprime a matriz de hamming em binario, contendo os bytes de caracter e os bits de paridade
-void imprimeHamming(byte_t elemento[(TAM + 1)])
+void imprimeMatriz(byte_t elemento[(TAM + 1)])
 {
     int i = 0;
     int bit;
@@ -136,12 +136,12 @@ int main()
     // Preenche a paridade na vertical
     paridadeVertical(matrizMensagem, elemento);
 
-    imprimeHamming(elemento);
+    imprimeMatriz(elemento);
 
     // Erro gerado propositalmente a fim de teste
     elemento[0].caractere = 0x37;
 
-    imprimeHamming(elemento);
+    imprimeMatriz(elemento);
 
     // Busca erros na vertical
     for (j = 0; j < 8; j++)

@@ -133,8 +133,6 @@ void converteMensagem(char *msg, unsigned char *dados)
 // Responsável por criar o canal de comunicação entre o servidor e o cliente
 int cria_raw_socket(char *nome_interface_rede)
 {
-    struct sockaddr_ll sndr_addr;
-
     pacote_t pacote;
     pacote.marcadorDeInicio = 126;
     memset(pacote.dados, 0, TAM);
@@ -159,7 +157,7 @@ int cria_raw_socket(char *nome_interface_rede)
     if (soquete == -1)
     {
         fprintf(stderr, "Erro ao criar socket: Verifique se você é root!\n");
-        exit(-1);
+        exit(204);
     }
     int ifindex = if_nametoindex(nome_interface_rede);
     struct sockaddr_ll endereco = {0};
@@ -171,18 +169,19 @@ int cria_raw_socket(char *nome_interface_rede)
     if (bind(soquete, (struct sockaddr *)&endereco, sizeof(endereco)) == -1)
     {
         fprintf(stderr, "Erro ao fazer bind no socket\n");
-        exit(-1);
+        exit(202);
     }
 
     struct packet_mreq mr = {0};
     mr.mr_ifindex = ifindex;
     mr.mr_type = PACKET_MR_PROMISC;
+
     // Não joga fora o que identifica como lixo: Modo promíscuo
     if (setsockopt(soquete, SOL_PACKET, PACKET_ADD_MEMBERSHIP, &mr, sizeof(mr)) == -1)
     {
         fprintf(stderr, "Erro ao fazer setsockopt: "
                         "Verifique se a interface de rede foi especificada corretamente.\n");
-        perror("erro");
+        exit(204);
     }
 
     const int timeoutMillis = 1000; // 1 segundo de timeout
@@ -191,7 +190,6 @@ int cria_raw_socket(char *nome_interface_rede)
 
     return soquete;
 }
-
 
 // Atualiza o ponteiro que indica a sequencia do pacote recebido seja ACK ou NACK
 void atualizaPonteiros(int *ack, int *pontsinal, int *pontsinalant, int *pontlocal)
@@ -240,7 +238,6 @@ void atualizaPonteiros(int *ack, int *pontsinal, int *pontsinalant, int *pontloc
     }
     *pontsinalant = *pontsinal;
 }
-
 
 // Recebe os dados do pacote e preenche os ponteiros com os respectivos valores
 void analisaDevolucao(pacote_t packdevolve, int pontsinalant, int *pontsinal, int *ack)
@@ -340,7 +337,7 @@ int terminalEntrada()
         }
 
         // send - envia arquivo
-        if ((read[0] == 115) && (read[1] == 101) && (read[2] == 110) && (read[3] == 100) && (read[4] == 32))
+        else if ((read[0] == 115) && (read[1] == 101) && (read[2] == 110) && (read[3] == 100) && (read[4] == 32))
         {
             arq = fopen("msg", "w");
             if (!arq)
@@ -349,6 +346,11 @@ int terminalEntrada()
             fprintf(arq, "%s", read);
             fclose(arq);
             return ENVIA_ARQUIVO;
+        }
+        else
+        {
+            perror("Comando inváldo");
+            exit(203);
         }
     }
     else if (inicio == 105)

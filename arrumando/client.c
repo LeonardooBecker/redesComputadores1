@@ -7,12 +7,12 @@
 #include <string.h>
 #include <ncurses.h>
 #include <time.h>
+#include <unistd.h>
 #include "lib.h"
 
 int main()
 {
     int soquete = cria_raw_socket("enp3s0");
-
     int ifindex = if_nametoindex("enp3s0");
     struct sockaddr_ll endereco = {0};
     endereco.sll_family = AF_PACKET;
@@ -32,6 +32,7 @@ int main()
 
     pacote.tamanho = strlen(pacote.dados);
 
+    char diretorio[TAM];
     char linha[TAM];
     char mensagem[QNT_PACOTES][TAM];
     char mensagemCompleta[QNT_PACOTES][TAM];
@@ -49,7 +50,6 @@ int main()
 
     time_t now;
     struct tm *tm_now;
-    char nomeArquivo[TAM];
 
     char *ptr;
 
@@ -58,6 +58,15 @@ int main()
     int state;
     int stateAuxiliar;
     int packAtual = 0;
+    int timeout = 0;
+
+    FILE *log;
+    log = fopen("log.txt", "w");
+    if (!log)
+    {
+        perror("Erro ao abrir arquivo");
+    }
+    fprintf(log, "\t\tIniciando batebapo\n\n");
 
     while (1)
     {
@@ -72,11 +81,25 @@ int main()
         atualiza = 0;
 
         state = terminalEntrada();
+        if (state == ENCERRA_PROGRAMA)
+        {
+            printf("\nSucesso\n");
+            return 200;
+        }
         int msg = recvfrom(soquete, &packdevolve, sizeof(packdevolve), 0, (struct sockaddr *)&sndr_addr, &addr_len);
         if (msg == -1)
         {
             if (state == NADA_RECEBIDO)
                 state = NADA_RECEBIDO;
+            else
+            {
+                timeout++;
+                if (timeout == 15)
+                {
+                    perror("Timeout");
+                    return 201;
+                }
+            }
         }
         // Se ele conseguiu receber algo, é porque o outro lado enviou
         else
@@ -105,7 +128,10 @@ int main()
             {
                 arq = fopen("msg", "r");
                 if (!arq)
-                    printf("Erro ao abrir o arquivo");
+                {
+                    perror("Arquivo inexistente");
+                    return 205;
+                }
                 while (!feof(arq))
                 {
                     if (fgets(linha, TAM, arq))
@@ -117,21 +143,32 @@ int main()
                         sprintf(mensagem[sequencia], "[%02d/%02d/%04d %02d:%02d:%02d]<%s> : %s\n",
                                 tm_now->tm_mday, tm_now->tm_mon + 1, tm_now->tm_year + 1900,
                                 tm_now->tm_hour, tm_now->tm_min, tm_now->tm_sec, getenv("USER"), linha);
-                        // sprintf(mensagem[sequencia],"%s",linha);
+
+                        fprintf(log, "Mensagem enviada: [%02d/%02d/%04d %02d:%02d:%02d]<%s> : %s\n",
+                                tm_now->tm_mday, tm_now->tm_mon + 1, tm_now->tm_year + 1900,
+                                tm_now->tm_hour, tm_now->tm_min, tm_now->tm_sec, getenv("USER"), linha);
+
                         sequencia++;
                     }
                     if (sequencia == QNT_PACOTES)
                     {
-                        printf("LIMITE MAXIMO ATINGIDO");
-                        break;
+                        perror("Falha ao escrever arquivo");
+                        return 207;
                     }
                 }
+                fclose(arq);
             }
 
             if (state == ENVIA_ARQUIVO)
             {
-
+                getcwd(diretorio, sizeof(diretorio));
                 arq = fopen("msg", "r");
+                if (!arq)
+                {
+                    perror("Arquivo inexistente");
+                    return 205;
+                }
+
                 fgets(linha, TAM, arq);
                 ptr = strtok(linha, " ");
                 ptr = strtok(NULL, " ");
@@ -141,8 +178,13 @@ int main()
                 if (!arq)
                 {
                     perror("Arquivo inexistente");
-                    return 1;
+                    return 205;
                 }
+
+                fprintf(log, "Midia enviada: [%02d/%02d/%04d %02d:%02d:%02d]<%s> : <%s/%s>\n\n",
+                        tm_now->tm_mday, tm_now->tm_mon + 1, tm_now->tm_year + 1900,
+                        tm_now->tm_hour, tm_now->tm_min, tm_now->tm_sec, getenv("USER"), diretorio, ptr);
+
                 int bytes_read;
                 int i;
                 while ((bytes_read = fread(linha, 1, TAM, arq)) > 0)
@@ -157,6 +199,7 @@ int main()
                 fclose(arq);
             }
 
+            timeout = 0;
             while (1)
             {
                 if (atualiza)
@@ -215,7 +258,14 @@ int main()
                 // Recebe mensagem de ack ou nack
                 int msg = recvfrom(soquete, &packdevolve, sizeof(packdevolve), 0, (struct sockaddr *)&sndr_addr, &addr_len);
                 if (msg == -1)
-                    perror("Erro ao receber a mensagem");
+                {
+                    timeout++;
+                    if (timeout == 10)
+                    {
+                        perror("Timeout");
+                        return 201;
+                    }
+                }
                 else
                 {
                     atualiza = 1;
@@ -228,13 +278,21 @@ int main()
         {
             packAtual = 0;
             pacote.tipo = 0x00;
+            timeout = 0;
             while (pacote.tipo != 0x0F)
             {
                 memset(packdevolve.dados, 0, TAM);
                 packdevolve.crc = 0x00;
                 msg = recvfrom(soquete, &pacote, sizeof(pacote), 0, (struct sockaddr *)&sndr_addr, &addr_len);
                 if (msg == -1)
-                    perror("Erro ao receber a mens");
+                {
+                    timeout++;
+                    if (timeout == 10)
+                    {
+                        perror("Timeout");
+                        return 201;
+                    }
+                }
                 else
                 {
                     if ((pacote.tipo == 0x01) || (pacote.tipo == 0x10))
@@ -271,26 +329,42 @@ int main()
                     perror("sendto");
                 }
             }
-            FILE *arq2;
+            FILE *arqImagem;
             if (stateAuxiliar == RECEBE_ARQUIVO)
             {
-                printf("midia enviada\n\n");
-                arq2 = fopen("img.jpg", "wb");
+                time(&now);
+                tm_now = localtime(&now);
+                getcwd(diretorio, sizeof(diretorio));
+                arqImagem = fopen("img.jpg", "wb");
+                if (!arqImagem)
+                {
+                    perror("Erro ao abrir arquivo");
+                    return 205;
+                }
+
+                printf("[%02d/%02d/%04d %02d:%02d:%02d]<%s> : Arquivo de midia enviado! O arquivo pode ser encontrado em <%s/img.jpg>\n",
+                       tm_now->tm_mday, tm_now->tm_mon + 1, tm_now->tm_year + 1900,
+                       tm_now->tm_hour, tm_now->tm_min, tm_now->tm_sec, getenv("USER"), diretorio);
+                fprintf(log, "Midia Recebida: [%02d/%02d/%04d %02d:%02d:%02d]<%s> : Arquivo de midia enviado! O arquivo pode ser encontrado em <%s/img.jpg>\n\n",
+                        tm_now->tm_mday, tm_now->tm_mon + 1, tm_now->tm_year + 1900,
+                        tm_now->tm_hour, tm_now->tm_min, tm_now->tm_sec, getenv("USER"), diretorio);
+
                 for (int i = 0; i < packAtual; i++)
                 {
-                    fwrite(mensagemCompleta[i], 1, sizeof(mensagemCompleta[i]), arq2);
+                    fwrite(mensagemCompleta[i], 1, sizeof(mensagemCompleta[i]), arqImagem);
                 }
-                fclose(arq2);
+                fclose(arqImagem);
             }
             if (stateAuxiliar == RECEBE_MENSAGEM)
             {
                 for (int i = 0; i < packAtual; i++)
                 {
                     printf("%s", mensagemCompleta[i]);
+                    fprintf(log, "Mensagem recebida: %s", mensagemCompleta[i]);
                 }
             }
         }
-
         state = NADA_RECEBIDO;
     }
+    fclose(log);
 }
